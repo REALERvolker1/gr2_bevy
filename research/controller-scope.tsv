@@ -1,0 +1,20 @@
+id	rva	reason
+controller-1c4c470	0x1c4c470	PlayerCharacter constructor installs vtable and native controller defaults
+controller-1c4f120	0x1c4f120	PlayerMovementComponent constructor installs movement vtable
+controller-1c5a410	0x1c5a410	DashEndPoint body, ranges direction and bounded collision closure
+controller-1c5b750	0x1c5b750	DashInTheAirEndRefactor body, camera release impulse and state reset
+controller-1c5e160	0x1c5e160	DoFirstJump body and launch request
+controller-1c60dc0	0x1c60dc0	Jump type dispatcher and type5 first-jump request
+controller-1c64ef0	0x1c64ef0	InputDashReleased body calls air end when active
+controller-1c67690	0x1c67690	Wall-jump launch helper called for jump types0to2
+controller-1c6c180	0x1c6c180	OnDashOnGroundEnd body queues velocity-change impulse
+controller-1c768d0	0x1c768d0	ResetDash body restores air readiness and movement settings
+controller-1cfd060	0x1cfd060	Global time-dilation getter dependency
+controller-1eb9e00	0x1eb9e00	PlayerCharacter class getter identifies construction wrapper
+controller-1ebc980	0x1ebc980	DashEndPoint exec dispatch reaches body
+controller-1ebf7f0	0x1ebf7f0	OnDashOnGroundEnd exec dispatch reaches body
+controller-1ec8300	0x1ec8300	PlayerMovementComponent class getter identifies construction wrapper
+controller-1f36bf0	0x1f36bf0	atan2 approximation used in dash input-angle classifier
+controller-37f9e70	0x37f9e70	Concrete LaunchCharacter combines channels and queues launch
+controller-38292a0	0x38292a0	Concrete AddImpulse accumulates velocity-change request
+controller-38363d0	0x38363d0	Concrete movement Launch stores pending launch vector
