@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+workspace=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+# Explicit overrides also work before this directory has a trusted project root.
+exec codex --cd "$workspace" \
+  -c "mcp_servers.rea.command=\"$workspace/tools/rea\"" \
+  -c 'mcp_servers.rea.args=["mcp"]' \
+  -c 'mcp_servers.rea.startup_timeout_sec=60' \
+  -c 'mcp_servers.rea.tool_timeout_sec=600' "$@"

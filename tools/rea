@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+workspace=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+state="$workspace/.rea"
+
+# Keep tool and JVM state local without changing the caller's environment.
+export HOME="$state/home"
+export XDG_CONFIG_HOME="$state/config"
+export XDG_CACHE_HOME="$state/cache"
+export XDG_DATA_HOME="$state/data"
+export XDG_STATE_HOME="$state/state"
+export TMPDIR="$state/tmp"
+export npm_config_cache="$state/cache/npm"
+export PLAYWRIGHT_BROWSERS_PATH="$state/cache/ms-playwright"
+export GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
+export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk}"
+export REA_ANALYSIS_PROVIDER="${REA_ANALYSIS_PROVIDER:-ghidra}"
+export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Duser.home=$HOME -Djava.io.tmpdir=$TMPDIR"
+mkdir -p -- "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+  "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$TMPDIR"
+
+exec node "$state/runtime/node_modules/rea-agents/scripts/rea.mjs" "$@"

@@ -1,0 +1,7 @@
+.rea/
+.work/
+research-local/
+/target/
+**/bin/
+**/obj/
+__pycache__/
