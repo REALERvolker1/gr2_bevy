@@ -1,0 +1,24 @@
+id	rva	reason
+movement-3828540	0x3828540	Base character movement constructor defaults and pending storage
+movement-37f9e70	0x37f9e70	LaunchCharacter snapshot and independent channel combination
+movement-38363d0	0x38363d0	Pending launch vector queue
+movement-38292a0	0x38292a0	Impulse accumulation and mass division gate
+movement-1c512c0	0x1c512c0	GR2 accumulated force and impulse consumer
+movement-3835430	0x3835430	Pending launch consumer and velocity replacement
+movement-3838620	0x3838620	Ordinary movement phase orders force then pending launch then physics
+movement-3843920	0x3843920	Simulated movement phase distinguishes pending operation behavior
+movement-38584d0	0x38584d0	Plane normal projects movement direction under enable bit
+movement-3858590	0x3858590	Plane normal and origin project locations
+movement-3858660	0x3858660	Plane projection and normalization of normals
+movement-386c090	0x386c090	MoveUpdatedComponent projects displacement before component move
+movement-1c71190	0x1c71190	GR2 walking override selects ordinary versus rotated gravity
+movement-383b8e0	0x383b8e0	Ordinary walking passes ground friction and braking into velocity calculation
+movement-1c54cf0	0x1c54cf0	GR2 CalcVelocity override delegates ordinary branch
+movement-382baa0	0x382baa0	Ordinary acceleration directional friction braking and speed policy
+movement-382af20	0x382af20	Braking friction factor substeps reverse acceleration and stop guards
+movement-3834010	0x3834010	Movement gravity scale multiplies generic gravity
+movement-3860720	0x3860720	Physics volume gravity versus settings fallback
+movement-3f1e710	0x3f1e710	PhysicsSettings class construction references
+movement-3bbb3b0	0x3bbb3b0	PhysicsSettings constructor calls core default initializer
+movement-2fb06b0	0x2fb06b0	PhysicsSettingsCore initializes fallback gravity to negative 980
+movement-1c62990	0x1c62990	Rotated gravity air control confirms boost field offsets
