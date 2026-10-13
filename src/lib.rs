@@ -7,4 +7,5 @@ pub mod motor;
 pub mod movement;
 pub mod resources;
 pub mod slide;
+pub mod speed;
 pub mod traversal;
