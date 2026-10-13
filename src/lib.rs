@@ -1,3 +1,4 @@
+pub mod controller;
 pub mod curves;
 pub mod grapple;
 pub mod launch;
