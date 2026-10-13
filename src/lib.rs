@@ -1,4 +1,5 @@
 pub mod curves;
+pub mod grapple;
 pub mod launch;
 pub mod locomotion;
 pub mod motor;

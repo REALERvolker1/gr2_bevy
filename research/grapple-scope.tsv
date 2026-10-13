@@ -1,0 +1,14 @@
+id	rva	reason
+point-constructor	0x1c88f80	Native GrapplingPoint vtable and scalar defaults
+skill-use-hook	0x1cb3190	Input admission and preparation of selected ordinary grapple
+skill-continue-after-animation	0x1c94060	Montage notify handoff to selected grapple point Blueprint
+point-grapple-start	0x1c9fcc0	Capture endpoint and start, launch direction, timer and timeline play rate
+point-timeline-init	0x1ca25d0	Bind point curve to update and finished native functions
+point-timeline-update	0x1cb18f0	Swept position interpolation and componentwise release launch
+point-timeline-finish	0x1c9c3d0	Finish cleanup and delayed active flag reset
+point-stop-grapple	0x1caef10	Explicit cancellation cleanup and delayed reset
+skill-stop-grapple	0x1caedc0	Dispatch cancellation to active point or registered points
+point-update-selection	0x1cb2b30	Point cooldown, screen projection and weighted target candidate admission
+skill-find-point	0x1c9c190	Select minimum point weight among eligible registered targets
+skill-can-grapple-to-point	0x1c92020	Range and visibility collision query boundary
+player-set-grappling	0x1c787f0	Set player grapple flag and upgrade-dependent air dash readiness
