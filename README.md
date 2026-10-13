@@ -17,7 +17,11 @@ camera-directed impulse.
 The fixture includes recovered ground dash range/curve/end impulse, first jump,
 edge grace, air-release/resource arithmetic, walking/braking and four speed
 timelines, tagged-wall running/jumping, fixed-point grappling, native mantle,
-strict slide tables and an Avian capsule motor. It contains authored test geometry and no copied game assets.
+strict slide tables and an Avian capsule motor. Ledge mounting activates while
+airborne with positive forward input, including ascent, without holding jump.
+Its ordered queries, permission guards and trajectory come from the native
+component and cooked coordinator. See [ledge findings](docs/research/ledge-mounting.md).
+It contains authored test geometry and no copied game assets.
 Source equations and collision/clock adaptations are distinguished in
 [the implementation boundary](docs/source-boundaries.md). The detailed
 [native/Blueprint findings](docs/research/controller-source.md) record source
@@ -27,15 +31,17 @@ parity remain incomplete.
 ```sh
 cargo test --locked --tests -j 2
 scripts/test-xvfb.sh
+scripts/test-xvfb.sh --ledge-smoke
 ```
 
 The graphical test runs the actual application under Xvfb. Its screenshot,
-render log and per-step committed-pose/resource CSV are in `.work/validation/`.
-It asserts that the scripted sequence executes ground dash, slide, jump, air
-press/release and stops at the wall. Headless tests independently exercise real
-Avian collisions and source arithmetic. The current 56 tests pass, including
-free and blocked grapple release through the actual motor. Vulkan validation
-remains enabled; the Xvfb check rejects renderer errors. See the
+render log and per-step committed-pose/resource CSV are archived separately in
+`.work/validation/controller/` and `.work/validation/ledge/`. The default course
+asserts ground dash, slide, jump, air press/release and wall stopping. The ledge
+course asserts one complete native mount and its planar finish velocity. Headless tests
+independently exercise real Avian collisions and source arithmetic, including
+ascent admission, blocked ledges and the nonretriggering permission delay.
+Vulkan validation remains enabled; the Xvfb check rejects renderer errors. See the
 [renderer investigation](docs/research/render-validation.md).
 
 [UE tooling](docs/ue-tooling.md) is copied locally: pinned package inspector,

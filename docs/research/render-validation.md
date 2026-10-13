@@ -73,3 +73,34 @@ an error, even if a screenshot was saved.
 This intervention validates the application workaround on this pinned Linux/X11
 configuration. It does not establish the exact first failing runtime branch,
 behavior on other render backends, or GR2 controller parity.
+
+## Ledge port regression checks
+
+Fresh runs on 2026-10-13 UTC used the same RTX3060/Vulkan adapter and driver.
+Both logs contain no `ERROR` or `VALIDATION` entries, and both inspected screenshots
+are 1280x720. The application now uses the cooked main capsule dimensions and
+camera offset. The end wall is authored taller to keep the wall-stop course
+separate from automatically admitted ledges.
+
+| Course | Fixed steps | Observed action results | Final position in metres |
+| --- | ---: | --- | --- |
+| `--ledge-smoke` | 2230 | Jump1, mount1, mount finish1 | (3.000040,0.962000,-7.766550) |
+| `--smoke` | 2150 | Ground dash2, slide1, jump1, air press1, air release1 | (-0.000297,0.962000,-24.247999) |
+
+The ledge course starts mounting at step 27, zeros velocity on entry, releases
+forward input during the trajectory and finishes at step 45 with planar velocity
+(0,-10) m/s. The host applies gravity on that finish tick, producing vertical
+velocity -0.245 m/s. This records the host schedule; it does not establish the
+original Unreal physics order. See [ledge source boundaries](ledge-mounting.md).
+
+The focused test run passed 34 tests across controller, grapple_motor, ledge,
+ledge_motor, mantle and motor. It includes real Avian fixtures for automatic
+ascent mounting, BlockClimb query success without initialization, long overhead
+rejection, world-clock permission delay and preservation of a pending Delay
+after a second mount. Pure fixtures check source phase boundaries and floating
+point addition order. The complete unrelated suite was not rerun for this slice.
+
+`scripts/test-xvfb.sh` accepts either course and archives screenshot, log and CSV
+under `.work/validation/ledge/` or `.work/validation/controller/`. The command
+logs and focused test output remain private in `.work/validation/`. Original GR2
+was not launched; interactive source testing remains gated unavailable.
