@@ -3,16 +3,18 @@
 use crate::{
     grapple::{Grapple, GrappleAnchor, GrappleConfig},
     launch::{air_dash_release, first_jump, wall_jump},
+    ledge::{
+        ClimbPresentation, ClimbSurface, LedgeContext, SOURCE_CAMERA_OFFSET, climb_presentation,
+        query_ledge,
+    },
     locomotion::{WalkingConfig, walking_velocity},
-    mantle::{MantleConfig, MantleStep, MantleSurface},
-    motor::{Motor, MotorSystems},
+    mantle::{Mantle, MantleConfig, MantleStep},
+    motor::{Motor, MotorSystems, MotorTranslation},
     movement::PendingMovement,
     resources::*,
     slide,
     speed::{SpeedConfig, SpeedInput, SpeedState, classify_input},
-    traversal::{
-        Mounting, WallRun, WallRunConfig, WallRunnable, can_keep_wallrun, query_mantle, query_wall,
-    },
+    traversal::{Mounting, WallRun, WallRunConfig, WallRunnable, can_keep_wallrun, query_wall},
 };
 use avian3d::prelude::*;
 use bevy::prelude::*;
@@ -24,6 +26,9 @@ pub const CM_TO_METRES: f32 = 0.01;
 pub struct PlayerCommand {
     /// Source axes X right, Y forward. None derives axes from the world command.
     pub axes: Option<Vec2>,
+    /// Native TryClimbing(true) bypasses forward input, not permission/crouch gates.
+    pub force_mount: bool,
+    pub camera_position: Option<Vec3>,
     pub direction: Vec3,
     pub forward: Vec3,
     pub aim: Vec3,
@@ -39,6 +44,8 @@ impl Default for PlayerCommand {
     fn default() -> Self {
         Self {
             axes: None,
+            force_mount: false,
+            camera_position: None,
             direction: Vec3::ZERO,
             forward: Vec3::NEG_Z,
             aim: Vec3::NEG_Z,
@@ -175,6 +182,7 @@ pub enum ActionResult {
     GrappleDenied,
     GrappleReleased,
     GrappleCancelled,
+    MantleDetected,
     MantleAccepted,
     MantleFinished,
 }
@@ -192,6 +200,13 @@ enum SpeedGate {
 pub struct Controller {
     pub speed: SpeedState,
     pub maximum_speed: f32,
+    pub can_use_climbing: bool,
+    pub can_climb_on_jumped: bool,
+    pub climb_presentation: ClimbPresentation,
+    climb_reenable_remaining: Option<f32>,
+    climb_config: Option<MantleConfig>,
+    climb_point: Vec3,
+    previous_grounded: bool,
     speed_gate: SpeedGate,
     pub stamina: Stamina,
     pub modifiers: DashModifiers,
@@ -213,6 +228,14 @@ impl Controller {
         Self {
             speed: SpeedState::default(),
             maximum_speed: config.speed.forward_max,
+            // Cooked player CDO overrides the native true permission default.
+            can_use_climbing: false,
+            can_climb_on_jumped: true,
+            climb_presentation: ClimbPresentation::None,
+            climb_reenable_remaining: None,
+            climb_config: None,
+            climb_point: Vec3::ZERO,
+            previous_grounded: false,
             speed_gate: SpeedGate::Idle,
             stamina: Stamina::new(config.resources),
             modifiers: DashModifiers::default(),
@@ -295,7 +318,7 @@ fn update_controller(
     clocks: Res<ControllerClocks>,
     spatial: SpatialQuery,
     wall_surfaces: Query<(), With<WallRunnable>>,
-    mantle_surfaces: Query<&Position, With<MantleSurface>>,
+    mantle_surfaces: Query<(&Position, Option<&ClimbSurface>)>,
     mut grapple_anchors: Query<&mut GrappleAnchor>,
     mut players: Query<(
         Entity,
@@ -313,9 +336,31 @@ fn update_controller(
         controller.step += 1;
         controller.result = ActionResult::None;
         if clocks.paused {
-            motor.displacement = Some(Vec3::ZERO);
+            motor.translation = Some(MotorTranslation::Sweep(Vec3::ZERO));
             continue;
         }
+        // AdjustToCapsule is a setup call (BP VM27414), not a per-attempt resize.
+        controller.climb_config.get_or_insert_with(|| {
+            config
+                .mantle
+                .adjusted_to_capsule(motor.config.radius, motor.config.standing_height * 0.5)
+        });
+        if let Some(remaining) = controller.climb_reenable_remaining {
+            let remaining = remaining - dt * clocks.global_time_dilation;
+            if remaining <= 0.0 {
+                controller.can_use_climbing = true;
+                controller.climb_reenable_remaining = None;
+            } else {
+                controller.climb_reenable_remaining = Some(remaining);
+            }
+        }
+        // PlayerLanding 0x1c76c20 restores these gates. Fixed floor transitions
+        // are the host event mapping, not a permission reset on every ground tick.
+        if motor.grounded && !controller.previous_grounded {
+            controller.can_use_climbing = true;
+            controller.can_climb_on_jumped = true;
+        }
+        controller.previous_grounded = motor.grounded;
         // HOST ADAPTATION: fixed post-query reset/update of the source NotOnGroundTimer.
         if motor.grounded {
             controller.not_on_ground_time = 0.0;
@@ -374,26 +419,77 @@ fn update_controller(
                 ActionResult::GrappleDenied
             };
         }
-        // HOST ADAPTATION: tagged ledge sensing maps ordinary jump/falling activation to source TryClimb.
-        if matches!(controller.action, Action::Locomotion)
-            && direction.dot(command.forward) > 0.0
+        // ReceiveTick VM3383..3439 calls TryClimbing(false) while IsFalling,
+        // including ascent. Native admission then requires raw forward >0.
+        let forced = command.force_mount;
+        if (forced || !motor.grounded)
+            && (forced || command_axes(&command, direction).y > 0.0)
+            && controller.can_use_climbing
+            && controller.can_climb_on_jumped
             && !command.crouch
-            && (command.jump || (!motor.grounded && motor.velocity.y <= 0.0))
+            && !motor.crouched
+            && matches!(controller.action, Action::Locomotion | Action::WallRun(_))
         {
-            if let Some(mounting) = query_mantle(
+            let climb_config = controller.climb_config.unwrap();
+            // HOST MAPPING: this single-player fixture aliases component owner,
+            // cached character and global player0. Source keeps them distinct.
+            let context = LedgeContext {
+                owner_position: position.0,
+                character_position: position.0,
+                movement_forward: command.forward,
+                camera_forward: command.aim,
+                radius: motor.config.radius,
+                half_height: motor.height() * 0.5,
+            };
+            if let Some(contact) = query_ledge(
                 &spatial,
                 &mantle_surfaces,
                 entity,
-                position.0,
-                command.forward,
-                collider,
-                motor.config.radius,
-                motor.height(),
-                config.mantle,
+                context,
+                climb_config,
+                forced,
             ) {
-                controller.action = Action::Mounting(mounting);
-                controller.result = ActionResult::MantleAccepted;
-                command.jump = false;
+                // ResetJump 0x1c76e20 resets count, not velocity or air readiness.
+                controller.jump_count = 0;
+                controller.can_use_climbing = false;
+                if matches!(controller.action, Action::WallRun(_)) {
+                    controller.action = Action::Locomotion;
+                    controller.wall_cooldown = 0.3;
+                }
+                controller.result = ActionResult::MantleDetected;
+                if contact.permits_initialization() {
+                    // Native writes this point before testing the surface-origin sentinel.
+                    controller.climb_point = contact.impact_point;
+                    if let Ok(motion) = Mantle::from_impact(
+                        position.0,
+                        contact.impact_point,
+                        command.forward,
+                        contact.origin,
+                        motor.config.radius,
+                        climb_config,
+                    ) {
+                        motor.velocity = Vec3::ZERO;
+                        controller.action = Action::Mounting(Mounting {
+                            motion,
+                            surface: contact.entity,
+                        });
+                        controller.result = ActionResult::MantleAccepted;
+                        command.jump = false;
+                    }
+                }
+                let camera_y = command
+                    .camera_position
+                    .map_or(position.y + SOURCE_CAMERA_OFFSET.y, |pose| pose.y);
+                controller.climb_presentation =
+                    climb_presentation(controller.climb_point.y, camera_y, forced, climb_config);
+                if controller.climb_presentation != ClimbPresentation::None {
+                    // BP_WallClimbing VM3047 uses Delay with stable Self/UUID.
+                    // Native 0x3a10f30 ignores a duplicate pending action.
+                    // HOST CLOCK MAPPING: world delta is fixed dt * global dilation.
+                    controller
+                        .climb_reenable_remaining
+                        .get_or_insert(1.0 / clocks.custom_time_dilation);
+                }
             }
         }
         controller.wall_cooldown = (controller.wall_cooldown - dt).max(0.0);
@@ -566,7 +662,7 @@ fn update_controller(
                 dash.elapsed += dt;
                 let intended = dash.start.lerp(dash.target, dash.alpha());
                 // Source teleports unswept; host sweeps each displacement to prevent wall clipping.
-                motor.displacement = Some(intended - position.0);
+                motor.translation = Some(MotorTranslation::Sweep(intended - position.0));
                 if dash.finished() {
                     // Native +0x818 queues a velocity-change impulse, not an overwrite.
                     // Ordinary native PerformMovement consumes impulses before a pending launch.
@@ -594,20 +690,16 @@ fn update_controller(
                 // Source plane constraints project displacement rather than stored velocity.
                 // HOST ADAPTATION: opaque constraint-enable gates are represented by this active wall state.
                 if Vec2::new(motor.velocity.x, motor.velocity.z).length() > 1.1 {
-                    motor.displacement =
-                        Some(Vec3::new(motor.velocity.x, 0.0, motor.velocity.z) * dt);
+                    motor.translation = Some(MotorTranslation::Sweep(
+                        Vec3::new(motor.velocity.x, 0.0, motor.velocity.z) * dt,
+                    ));
                 }
             }
             Action::Locomotion => {
                 update_speed_target(
                     &mut controller,
                     config,
-                    command.axes.unwrap_or_else(|| {
-                        Vec2::new(
-                            direction.dot(command.forward.cross(Vec3::Y)),
-                            direction.dot(command.forward),
-                        )
-                    }),
+                    command_axes(&command, direction),
                     motor.velocity.length(),
                     dt,
                     &clocks,
@@ -629,21 +721,23 @@ fn update_controller(
             }
             Action::Slide => {}
             Action::Grapple(grapple) => {
-                motor.displacement = Some(grapple.desired_position(dt) - position.0);
+                motor.translation = Some(MotorTranslation::Sweep(
+                    grapple.desired_position(dt) - position.0,
+                ));
             }
             Action::Mounting(mounting) => {
                 let origin = mantle_surfaces
                     .get(mounting.surface)
-                    .map_or(Vec3::ZERO, |pose| pose.0);
+                    .map_or(Vec3::ZERO, |(pose, _)| pose.0);
                 match mounting.motion.tick(
                     position.0,
                     origin,
                     command.forward,
-                    dt,
+                    dt * clocks.global_time_dilation,
                     clocks.custom_time_dilation,
                 ) {
                     MantleStep::Position(next) => {
-                        motor.displacement = Some(next - position.0);
+                        motor.translation = Some(MotorTranslation::SetPosition(next));
                     }
                     MantleStep::Finished { velocity } => {
                         motor.velocity = velocity;
@@ -651,7 +745,7 @@ fn update_controller(
                         controller.result = ActionResult::MantleFinished;
                     }
                     MantleStep::Paused => {
-                        motor.displacement = Some(Vec3::ZERO);
+                        motor.translation = Some(MotorTranslation::Sweep(Vec3::ZERO));
                     }
                     MantleStep::Inactive => {
                         controller.action = Action::Locomotion;
@@ -711,6 +805,7 @@ fn update_controller(
         );
         command.jump = false;
         command.dash = false;
+        command.force_mount = false;
     }
 }
 
@@ -777,4 +872,13 @@ fn update_speed_target(
     if let Some(target) = controller.speed.target(config.speed, 0.0) {
         controller.maximum_speed = target;
     }
+}
+
+fn command_axes(command: &PlayerCommand, direction: Vec3) -> Vec2 {
+    command.axes.unwrap_or_else(|| {
+        Vec2::new(
+            direction.dot(command.forward.cross(Vec3::Y)),
+            direction.dot(command.forward),
+        )
+    })
 }

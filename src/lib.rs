@@ -2,6 +2,7 @@ pub mod controller;
 pub mod curves;
 pub mod grapple;
 pub mod launch;
+pub mod ledge;
 pub mod locomotion;
 pub mod mantle;
 pub mod motor;

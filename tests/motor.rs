@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use avian3d::prelude::*;
 use bevy::{prelude::*, time::TimeUpdateStrategy};
-use gr2_controller::motor::{Motor, MotorPlugin};
+use gr2_controller::motor::{Motor, MotorPlugin, MotorTranslation};
 
 fn world() -> App {
     let mut app = App::new();
@@ -79,17 +79,19 @@ fn action_displacement_is_swept_without_creating_physical_momentum() {
         Vec3::new(1.0, 20.0, 20.0),
     );
     let p = player(&mut app, Vec3::ZERO, Vec3::new(2.0, -1.0, 3.0));
-    app.world_mut().get_mut::<Motor>(p).unwrap().displacement = Some(Vec3::X * 10.0);
+    app.world_mut().get_mut::<Motor>(p).unwrap().translation =
+        Some(MotorTranslation::Sweep(Vec3::X * 10.0));
     ticks(&mut app, 1);
     let motor = app.world().get::<Motor>(p).unwrap();
-    assert!(motor.displacement.is_none());
+    assert!(motor.translation.is_none());
     assert!(motor.velocity.x.abs() < 0.001);
     assert!((motor.velocity.y + 1.0).abs() < 0.001);
     assert!((motor.velocity.z - 3.0).abs() < 0.001);
     assert!(position(&app, p).x < 1.151);
 
     let free = player(&mut app, Vec3::new(-20.0, 0.0, 0.0), Vec3::Z * 3.0);
-    app.world_mut().get_mut::<Motor>(free).unwrap().displacement = Some(Vec3::X);
+    app.world_mut().get_mut::<Motor>(free).unwrap().translation =
+        Some(MotorTranslation::Sweep(Vec3::X));
     ticks(&mut app, 1);
     assert!((position(&app, free).x + 19.0).abs() < 0.001);
     assert_eq!(
@@ -228,4 +230,20 @@ fn crouch_preserves_feet_and_standing_requires_clearance() {
     ticks(&mut app, 2);
     assert!(!app.world().get::<Motor>(p).unwrap().crouched);
     assert!((position(&app, p).y - 0.902).abs() < 0.001);
+}
+
+#[test]
+fn native_unswept_position_crosses_a_wall_without_velocity_or_second_integration() {
+    let mut app = world();
+    block(&mut app, Vec3::X * 2.0, Vec3::new(1.0, 20.0, 20.0));
+    let velocity = Vec3::new(1.0, 2.0, 3.0);
+    let p = player(&mut app, Vec3::ZERO, velocity);
+    app.world_mut().get_mut::<Motor>(p).unwrap().translation =
+        Some(MotorTranslation::SetPosition(Vec3::X * 10.0));
+    ticks(&mut app, 1);
+    assert_eq!(position(&app, p), Vec3::X * 10.0);
+    assert_eq!(app.world().get::<Motor>(p).unwrap().velocity, velocity);
+    assert!(app.world().get::<Motor>(p).unwrap().translation.is_none());
+    ticks(&mut app, 1);
+    assert!((position(&app, p) - (Vec3::X * 10.0 + velocity / 60.0)).length() < 1e-5);
 }

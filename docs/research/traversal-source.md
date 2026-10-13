@@ -240,19 +240,20 @@ not the actual native mounting trajectory.
 Component TryClimb 0x1a49ac0 first requires owner/world. It checks overhead capsule
 clearance before forward ledge queries. Helpers 0x1a25440 and 0x1a259f0 perform the
 wall/top and full capsule clearance operations. The ordinary facing guard in
-0x1a259f0 uses camera forward with Z cleared and wall-hit impact normal:
+0x1a259f0 uses camera forward with Z cleared and wall-hit Normal:
 
 ```text
-deviation = 180 - acos(clamp(dot(normalized_camera_XY, impact_normal), -1, 1))
+deviation = 180 - acos(clamp(dot(normalized_camera_XY, wall_normal), -1, 1))
                    * 57.295776
 reject if deviation > 20 degrees
 ```
 
 Forced calls bypass this facing guard. Several special actor classes reject the
-query. Actor/component tags and additional full-capsule sweeps reject blocked
-upper space. The exact shape/channel argument ABI and hit-coordinate conventions
-must be retained as open dependencies; an authored host ledge detector is a
-query adaptation even when it supplies source-compatible geometry.
+query. Actor/component BlockClimb tags suppress initialization while preserving
+a true query result. The shape/channel ABI, Normal versus ImpactNormal, ImpactPoint
+coordinates, class filters and clearance retry are now qualified in
+[ledge-mounting.md](ledge-mounting.md). Avian contact generation remains a host
+mapping.
 
 TryClimb's existing decompiler incorrectly declares void. Instruction 0x1a49afd
 initializes SIL false;0x1a4a0b8..0x1a4a0bf loads the selected hit's blocking bit;
@@ -275,9 +276,9 @@ d = normalized planar actor forward         stored at component+0x1a0
 O = hit actor/component origin                   stored at component+0x1d0
 ```
 
-It sets bIsClimbing true and movement velocity zero. Parent hit-coordinate and
-collision-resolution policy still need closure before interpreting T.z as a
-standalone world-surface height. Do not replace F with an invented fixed distance.
+It sets bIsClimbing true and movement velocity zero. H is the qualified top
+ImpactPoint, not HitResult.Location. Backend contact equivalence and actor/root
+hierarchy remain host dependencies. Do not replace F with an invented fixed distance.
 
 ### Two movement phases
 
@@ -294,7 +295,7 @@ else if forward_alpha < 1:
     forward_alpha = clamp(forward_alpha + delta * MoveForwardSpeed * player_factor / F, 0, 1)
     B = (S.x, S.y, current_actor_position.z)
     delta_origin = current_surface_origin - O
-    position = lerp(B, B + d * F + delta_origin, forward_alpha)
+    position = lerp(B, delta_origin + d * F + B, forward_alpha)
     O = current_surface_origin
 else:
     movement_velocity = current_owner_actor_forward * AdditionalFinishValocityMultiplier
@@ -302,7 +303,9 @@ else:
 ```
 
 The update writes position through native actor-position helper 0x36fe260 with
-zero flag arguments. Phase 2 begins on the tick after lift reaches1. Finish occurs
+sweep=false and teleport=None, qualified at hot body0x1a4c5d0. The motor uses
+unswept pose requests; physical integration suppression is a host policy. Phase 2
+begins on the tick after lift reaches1. Finish occurs
 on the tick after forward reaches1. Do not consume a step's unused lift time
 inside the forward phase. At factor1 the continuous arithmetic durations are
 D/1500 and F/2500, with those additional update-boundary delays. The source does
@@ -328,8 +331,8 @@ interpolates PlayerLocationOnClimbStart+0x804 toPlayerLocationOnClimbStartWithOf
 coupling remain open. This curve is distinct from the UClimbComponent two-phase
 update; layering both unconditionally would invent a second movement owner.
 
-Required follow-up includes exact capsule/ledge query ABI, remaining capsule-resize callers,
-special actor classes and moving-platform corrections, engine movement/query
+Required follow-up includes remaining capsule-resize callers, actor/component
+hierarchy and moving-platform corrections, engine movement/query
 phase, wall-jump counter callers, and source runtime comparison. Existing passing
 host fixtures validate their stated source equations and integration adaptations;
 they do not establish traversal parity.

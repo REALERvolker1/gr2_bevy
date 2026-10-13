@@ -53,6 +53,28 @@ impl Default for MotorConfig {
     }
 }
 
+impl MotorConfig {
+    /// Owned BP_PlayerCharacter CDO CapsuleComponent -> export263 CollisionCylinder.
+    /// Main capsule is radius50cm, half-height96cm; export262 InAirCapsule differs.
+    pub fn gr2() -> Self {
+        Self {
+            radius: 0.5,
+            standing_height: 1.92,
+            ..Self::default()
+        }
+    }
+    pub fn standing_collider(self) -> Collider {
+        capsule(self, false)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MotorTranslation {
+    Sweep(Vec3),
+    /// Unswept absolute position. This does not request Unreal TeleportPhysics.
+    SetPosition(Vec3),
+}
+
 #[derive(Component, Debug, Default, Clone)]
 #[require(
     RigidBody::Kinematic,
@@ -62,9 +84,8 @@ impl Default for MotorConfig {
 )]
 pub struct Motor {
     pub velocity: Vec3,
-    /// One tick of action-authored translation, swept by the host collision
-    /// motor without converting the action curve into physical momentum.
-    pub displacement: Option<Vec3>,
+    /// One action position request, consumed by this sole integration owner.
+    pub translation: Option<MotorTranslation>,
     pub grounded: bool,
     pub ground_normal: Option<Vec3>,
     pub crouched: bool,
@@ -172,10 +193,20 @@ fn move_motor(
             let (_, motor, position, rotation, collider) = query.get(entity).unwrap();
             (motor.clone(), *position, *rotation, collider.clone())
         };
+        // HOST ADAPTATION: a source pose request owns this tick. Native mount
+        // writes are unswept, but UE movement/gravity scheduling remains open.
+        if let Some(MotorTranslation::SetPosition(target)) = motor.translation {
+            let mut query = params.p1();
+            let (_, mut stored_motor, mut stored_position, _, _) = query.get_mut(entity).unwrap();
+            stored_position.0 = target;
+            stored_motor.translation = None;
+            continue;
+        }
         let mut contact_normals = Vec::new();
-        let sweep_velocity = motor
-            .displacement
-            .map_or(motor.velocity, |delta| delta / time.delta_secs());
+        let sweep_velocity = match motor.translation {
+            Some(MotorTranslation::Sweep(delta)) => delta / time.delta_secs(),
+            _ => motor.velocity,
+        };
         let output = params.p0().move_and_slide(
             &collider,
             position.0,
@@ -196,7 +227,7 @@ fn move_motor(
         let mut query = params.p1();
         let (_, mut motor, mut position, _, _) = query.get_mut(entity).unwrap();
         position.0 = output.position;
-        motor.velocity = if motor.displacement.take().is_some() {
+        motor.velocity = if motor.translation.take().is_some() {
             // The original action teleports along its timeline. Sweeping that
             // translation is a host adaptation; only collision constraints
             // affect the retained physical velocity.

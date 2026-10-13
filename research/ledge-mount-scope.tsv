@@ -1,0 +1,20 @@
+id	rva	reason
+ledge-world-sweep	0x3824b60	Qualify shape tags and UWorld query ABI
+ledge-actor-position	0x36fe260	Qualify native mantle position commit flags
+ledge-ignored-actor	0x37e7670	Qualify overhead query ignored owner
+ledge-ignored-actors	0x37e76d0	Qualify ledge query ignore list
+ledge-coordinator-gate	0x1c2dbf0	Qualify ordinary TryClimbing movement admission
+ledge-coordinator-predicate	0x1c66b50	Qualify post-success camera reset route
+ledge-coordinator-event	0x1eba290	Resolve success event name
+ledge-excluded-class-a	0x1e0d7d0	Resolve forward query excluded actor class
+ledge-excluded-class-b	0x1dc88b0	Resolve forward query excluded actor class
+ledge-excluded-class-c	0x1ee90f0	Resolve forward query excluded actor class
+ledge-excluded-class-d	0x1ef8040	Resolve forward query excluded actor class
+ledge-special-class	0x1ef2c20	Resolve target initialization class guard
+ledge-actor-base	0x3f6fa80	Resolve target class guard base
+ledge-reset-jump	0x1c76e20	Prove mount success reset affects jump state rather than velocity or dash readiness
+ledge-player-landing	0x1c76c20	Prove landing restores climb permissions
+ledge-movement-tick	0x3848360	Bound inherited movement tick and root-motion admission during mounting
+ledge-movement-callback	0x1c789d0	Bound concrete prephysics callback during mounting
+ledge-mount-body	0x1a4c5d0	Qualify native hot body and unswept position arguments
+ledge-latent-delay	0x3a10f30	Prove stable Blueprint Delay does not restart an existing action

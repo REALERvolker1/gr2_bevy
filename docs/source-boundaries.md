@@ -49,8 +49,9 @@ These are integration choices with explicit comments, not established UE parity:
   non-locomotion actions, landing guards,
   slide-end CurrentSpeed writes and native upgrade writer activation remain open.
   Falling steering is an explicit host acceleration policy.
-- Capsule shape, skin, floor slope threshold and crouch clearance are host
-  parameters. Resizing preserves feet. Standing requires full capsule clearance.
+- Jack uses the cooked main capsule radius50 cm/half-height96 cm and camera
+  relative location(-10,0,70) cm. Skin, floor slope threshold and crouch clearance
+  remain host parameters. Resizing preserves feet. Standing requires clearance.
 - First jump and.3s coyote admission implement the ordinary unupgraded branch.
   Motorcycle, collision-clearance and alternate jump-type branches remain
   source dependencies. Fixed post-query updates reset the edge timer/jump count.
@@ -106,9 +107,13 @@ launch for the next movement phase. Point cooldown/reset delays use the fixed
 audio clock. Montage, nonordinary point classes and cancellation timing remain
 source dependencies. See [grapple findings](research/grapple-source.md).
 
-Tagged ledges use authored Avian probes and clearance instead of the complete
-native component classifier. The admitted mantle uses recovered capsule-adjusted
-geometry, separate lift/forward phases, moving-origin contribution and finish
-velocity. Sweeping the requested positions is a host collision adaptation.
-Native mantle is distinct from the still-unimplemented special Blueprint climb.
-See [traversal findings](research/traversal-source.md).
+Ordinary blocking geometry uses the recovered ordered capsule/box/sphere ledge
+queries, class/tag filters, facing guard and retry geometry. Query success is
+separate from motion initialization. Automatic admission includes ascent with
+positive forward input and no held jump. The native two-phase component uses
+unswept absolute poses, with source reset, camera thresholds and nonretriggering
+permission delay. The motor suppresses its own physical integration on pose
+request ticks; native gravity/physics ordering remains unresolved. Avian contacts,
+source actor/root hierarchy and world-clock scheduling are host mappings.
+See [ledge mounting](research/ledge-mounting.md) for qualified findings and tests.
+Special Blueprint wall climbing remains separate and unimplemented.

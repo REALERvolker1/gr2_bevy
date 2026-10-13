@@ -17,7 +17,8 @@ use bevy::{
     window::{CursorGrabMode, CursorOptions},
 };
 use gr2_controller::{
-    controller::*, grapple::GrappleAnchor, mantle::MantleSurface, motor::*, traversal::WallRunnable,
+    controller::*, grapple::GrappleAnchor, ledge::SOURCE_CAMERA_OFFSET, motor::*,
+    traversal::WallRunnable,
 };
 use std::{
     fs::File,
@@ -25,9 +26,15 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SmokeCourse {
+    Controller,
+    Ledge,
+}
+
 #[derive(Resource)]
 struct RunMode {
-    smoke: bool,
+    smoke: Option<SmokeCourse>,
     frames: u32,
     screenshot_requested: bool,
     started: Instant,
@@ -41,6 +48,8 @@ struct Proof {
     jumps: u32,
     air_dashes: u32,
     air_releases: u32,
+    mounts: u32,
+    mount_finishes: u32,
 }
 #[derive(Resource, Default)]
 struct View {
@@ -51,7 +60,13 @@ struct View {
 struct Hud;
 
 fn main() {
-    let smoke = std::env::args().any(|arg| arg == "--smoke");
+    let smoke = if std::env::args().any(|arg| arg == "--ledge-smoke") {
+        Some(SmokeCourse::Ledge)
+    } else if std::env::args().any(|arg| arg == "--smoke") {
+        Some(SmokeCourse::Controller)
+    } else {
+        None
+    };
     std::fs::create_dir_all(".work/validation").expect("create private validation directory");
     let mut trace =
         BufWriter::new(File::create(".work/validation/controller.csv").expect("open trace"));
@@ -119,7 +134,7 @@ fn main() {
             .after(RenderSystems::Prepare)
             .before(RenderSystems::Render),
     );
-    if smoke {
+    if smoke.is_some() {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
             1.0 / 60.0,
         )));
@@ -128,6 +143,7 @@ fn main() {
 }
 
 fn setup(
+    mode: Res<RunMode>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -151,7 +167,7 @@ fn setup(
             Vec3::new(0.5, 4.0, 35.0),
             wall.clone(),
         ),
-        (Vec3::new(0.0, 4.0, -25.0), Vec3::new(12.0, 8.0, 0.5), wall),
+        (Vec3::new(0.0, 6.0, -25.0), Vec3::new(12.0, 12.0, 0.5), wall),
         (
             Vec3::new(3.0, 0.4, -5.0),
             Vec3::new(2.0, 0.8, 2.0),
@@ -175,9 +191,6 @@ fn setup(
             .id();
         if size.y >= 4.0 {
             commands.entity(block).insert(WallRunnable);
-        }
-        if size.y < 2.0 && center.y > 0.0 {
-            commands.entity(block).insert(MantleSurface);
         }
     }
     // Visible lane markers make displacement and clipping easy to inspect.
@@ -208,13 +221,23 @@ fn setup(
         Transform::from_translation(target),
     ));
     let config = ControllerConfig::default();
+    let spawn = if mode.smoke == Some(SmokeCourse::Ledge) {
+        Vec3::new(3.0, 0.97, -3.4)
+    } else {
+        Vec3::new(0.0, 0.97, 3.0)
+    };
+    let motor_config = MotorConfig::gr2();
     commands.spawn((
-        Motor::default(),
+        Motor {
+            config: motor_config,
+            ..default()
+        },
+        motor_config.standing_collider(),
         config,
         Controller::new(config),
         PlayerCommand::default(),
-        Position(Vec3::new(0.0, 0.91, 3.0)),
-        Transform::from_xyz(0.0, 0.91, 3.0),
+        Position(spawn),
+        Transform::from_translation(spawn),
     ));
     commands.spawn((
         Camera3d::default(),
@@ -265,7 +288,7 @@ fn read_input(
         &mut Motor,
     )>,
 ) {
-    if mode.smoke {
+    if mode.smoke.is_some() {
         return;
     }
     if buttons.just_pressed(MouseButton::Left) {
@@ -288,6 +311,7 @@ fn read_input(
         -axis(KeyCode::KeyW, KeyCode::KeyS),
     );
     for (mut command, mut controller, config, mut position, mut motor) in &mut players {
+        command.camera_position = Some(camera.1.translation());
         command.aim = Quat::from_euler(EulerRot::YXZ, view.yaw, view.pitch, 0.0) * Vec3::NEG_Z;
         command.dash_held = keys.pressed(KeyCode::ShiftLeft);
         command.forward = Quat::from_rotation_y(view.yaw) * Vec3::NEG_Z;
@@ -331,7 +355,7 @@ fn read_input(
                 }
             }
             controller.reset(*config);
-            position.0 = Vec3::new(0.0, 0.91, 3.0);
+            position.0 = Vec3::new(0.0, 0.97, 3.0);
             motor.velocity = Vec3::ZERO;
         }
     }
@@ -342,11 +366,22 @@ fn scripted_input(
     mut view: ResMut<View>,
     mut players: Query<(&Controller, &mut PlayerCommand)>,
 ) {
-    if !mode.smoke {
+    if mode.smoke.is_none() {
         return;
     }
     for (controller, mut input) in &mut players {
         let step = controller.step;
+        if mode.smoke == Some(SmokeCourse::Ledge) {
+            let approaching = (25..28).contains(&step);
+            input.axes = Some(if approaching { Vec2::Y } else { Vec2::ZERO });
+            input.direction = if approaching { Vec3::NEG_Z } else { Vec3::ZERO };
+            input.jump = step == 25;
+            if step >= 150 {
+                view.yaw = std::f32::consts::PI;
+                view.pitch = -0.2;
+            }
+            continue;
+        }
         if step >= 650 {
             view.yaw = std::f32::consts::PI;
             view.pitch = -0.15;
@@ -375,9 +410,20 @@ fn record(
             ActionResult::JumpAccepted => proof.jumps += 1,
             ActionResult::AirDashAccepted => proof.air_dashes += 1,
             ActionResult::AirDashReleased => proof.air_releases += 1,
+            ActionResult::MantleAccepted => proof.mounts += 1,
+            ActionResult::MantleFinished => {
+                proof.mount_finishes += 1;
+                assert!(
+                    (Vec2::new(motor.velocity.x, motor.velocity.z).length() - 10.0).abs() < 0.001,
+                    "native finish must retain its actor-forward velocity"
+                );
+            }
             _ => {}
         }
-        if !mode.smoke && controller.result == ActionResult::None && controller.step % 12 != 0 {
+        if mode.smoke.is_none()
+            && controller.result == ActionResult::None
+            && controller.step % 12 != 0
+        {
             continue;
         }
         let action = match controller.action {
@@ -414,12 +460,13 @@ fn record(
 
 fn camera_and_hud(
     view: Res<View>,
-    player: Single<(&Position, &Motor, &Controller)>,
+    player: Single<(&Position, &Motor, &Controller, &PlayerCommand)>,
     mut camera: Single<(&mut Transform, &mut Projection), With<Camera3d>>,
     mut hud: Single<&mut Text, With<Hud>>,
 ) {
-    let (position, motor, controller) = *player;
-    camera.0.translation = position.0 + Vec3::Y * (motor.height() * 0.5 - 0.15);
+    let (position, motor, controller, command) = *player;
+    camera.0.translation =
+        position.0 + Vec3::Y * SOURCE_CAMERA_OFFSET.y - command.forward * SOURCE_CAMERA_OFFSET.z;
     camera.0.rotation = Quat::from_euler(EulerRot::YXZ, view.yaw, view.pitch, 0.0);
     if let Projection::Perspective(projection) = &mut *camera.1 {
         projection.fov = (90.0 + controller.fov_add).to_radians();
@@ -441,7 +488,7 @@ fn smoke_finish(
     proof: Res<Proof>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    if !mode.smoke {
+    if mode.smoke.is_none() {
         return;
     }
     mode.frames += 1;
@@ -462,14 +509,25 @@ fn smoke_finish(
         let (position, controller) = *player;
         assert!(mode.screenshot_requested && position.0.is_finite() && controller.step >= 600);
         assert!(controller.stamina.current >= -150.0 && controller.stamina.current <= 100.0);
-        assert!(
-            proof.ground_dashes > 0
-                && proof.slides > 0
-                && proof.jumps > 0
-                && proof.air_dashes > 0
-                && proof.air_releases > 0,
-            "script must execute ground dash, slide, jump, air press and release"
-        );
+        if mode.smoke == Some(SmokeCourse::Ledge) {
+            assert_eq!(
+                proof.mounts, 1,
+                "source falling query must start exactly one ledge mount"
+            );
+            assert_eq!(
+                proof.mount_finishes, 1,
+                "source two-phase mount must finish"
+            );
+        } else {
+            assert!(
+                proof.ground_dashes > 0
+                    && proof.slides > 0
+                    && proof.jumps > 0
+                    && proof.air_dashes > 0
+                    && proof.air_releases > 0,
+                "script must execute ground dash, slide, jump, air press and release"
+            );
+        }
         assert!(position.z >= -24.5, "wall sweep must stop the capsule");
         info!(step = controller.step, position = ?position.0, "Xvfb controller smoke completed");
         exit.write(AppExit::Success);

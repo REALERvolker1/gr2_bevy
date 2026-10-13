@@ -2,10 +2,6 @@
 //! Source build 16083277: TryClimb 0x1a49ac0, update 0x1a442c0.
 use bevy::prelude::*;
 
-/// Authored host marker replacing source collision channels, actor classes and tags.
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub struct MantleSurface;
-
 /// Cooked BP_PlayerCharacter export 267, with omitted native constructor defaults.
 #[derive(Clone, Copy, Debug)]
 pub struct MantleConfig {
@@ -19,6 +15,8 @@ pub struct MantleConfig {
     pub bottom_ledge_max_distance: f32,
     pub ledge_depth_check_offset: f32,
     pub finish_speed: f32,
+    pub normal_ledge_height: f32,
+    pub low_ledge_height: f32,
 }
 
 impl Default for MantleConfig {
@@ -34,6 +32,8 @@ impl Default for MantleConfig {
             bottom_ledge_max_distance: 0.8,
             ledge_depth_check_offset: 0.0,
             finish_speed: 10.0,
+            normal_ledge_height: 1.0,
+            low_ledge_height: 0.0,
         }
     }
 }
@@ -108,13 +108,11 @@ impl Mantle {
         if !capsule_radius.is_finite() || capsule_radius <= 0.0 {
             return Err(MantleError::InvalidCapsuleRadius);
         }
-        if [
-            config.climb_speed,
-            config.move_forward_speed,
-            config.finish_speed,
-        ]
-        .iter()
-        .any(|speed| !speed.is_finite() || *speed <= 0.0)
+        if [config.climb_speed, config.move_forward_speed]
+            .iter()
+            .any(|speed| !speed.is_finite() || *speed <= 0.0)
+            || !config.finish_speed.is_finite()
+            || config.finish_speed < 0.0
         {
             return Err(MantleError::InvalidSpeed);
         }
@@ -122,7 +120,17 @@ impl Mantle {
         if surface_origin == Vec3::ZERO {
             return Err(MantleError::InvalidSurfaceOrigin);
         }
-        let forward = Vec3::new(actor_forward.x, 0.0, actor_forward.z).normalize_or_zero();
+        // TryClimb 0x1a49ac0 normalizes its dimensionless planar direction only
+        // when squared length is at least UE's 1e-8 tolerance.
+        let planar = Vec3::new(actor_forward.x, 0.0, actor_forward.z);
+        let squared_length = planar.length_squared();
+        let forward = if squared_length == 1.0 {
+            planar
+        } else if squared_length >= 1e-8 {
+            planar / squared_length.sqrt()
+        } else {
+            Vec3::ZERO
+        };
         if forward == Vec3::ZERO {
             return Err(MantleError::MissingForwardDirection);
         }
@@ -163,7 +171,7 @@ impl Mantle {
         match self.phase {
             Phase::Lift { alpha } => (alpha, 0.0),
             Phase::Forward { alpha } => (1.0, alpha),
-            Phase::Finished => (1.0, 1.0),
+            Phase::Finished => (0.0, 0.0),
         }
     }
 
@@ -179,19 +187,13 @@ impl Mantle {
         if matches!(self.phase, Phase::Finished) {
             return MantleStep::Inactive;
         }
-        // Host input validation prevents invalid engine/query values entering the core.
-        if !actual_position.is_finite()
-            || !surface_origin.is_finite()
-            || !actor_forward.is_finite()
-            || !delta.is_finite()
-            || !player_factor.is_finite()
-            || delta < 0.0
-            || player_factor < 0.0
-        {
-            return MantleStep::Paused;
-        }
         match self.phase {
             Phase::Lift { alpha } => {
+                // Host clock validation applies only where native update consumes
+                // world delta and player dilation; unused phase inputs are ignored.
+                if !valid_clock(delta, player_factor) {
+                    return MantleStep::Paused;
+                }
                 let alpha = (alpha
                     + delta * self.config.climb_speed * player_factor / self.lift_distance)
                     .clamp(0.0, 1.0);
@@ -203,12 +205,26 @@ impl Mantle {
                 MantleStep::Position(self.start.lerp(self.lift_target, alpha))
             }
             Phase::Forward { alpha } if alpha >= 1.0 => {
+                if !actor_forward.is_finite() {
+                    return MantleStep::Paused;
+                }
+                // Finish 0x1a310c0 clears captured trajectory and alphas, but
+                // retains distances and previous surface origin in the component.
+                self.start = Vec3::ZERO;
+                self.lift_target = Vec3::ZERO;
+                self.forward = Vec3::ZERO;
                 self.phase = Phase::Finished;
                 MantleStep::Finished {
                     velocity: actor_forward * self.config.finish_speed,
                 }
             }
             Phase::Forward { alpha } => {
+                if !valid_clock(delta, player_factor)
+                    || !actual_position.y.is_finite()
+                    || !surface_origin.is_finite()
+                {
+                    return MantleStep::Paused;
+                }
                 let alpha = (alpha
                     + delta * self.config.move_forward_speed * player_factor
                         / self.forward_distance)
@@ -219,12 +235,19 @@ impl Mantle {
                     return MantleStep::Paused;
                 }
                 let base = Vec3::new(self.start.x, actual_position.y, self.start.z);
-                let target = base + self.forward * self.forward_distance + surface_origin
-                    - self.previous_surface_origin;
+                // Native subtracts surface origins before adding the trajectory.
+                // Reordering this can erase motion through f32 cancellation.
+                let delta_origin = surface_origin - self.previous_surface_origin;
+                let target = delta_origin + self.forward * self.forward_distance + base;
                 self.previous_surface_origin = surface_origin;
                 MantleStep::Position(base.lerp(target, alpha))
             }
             Phase::Finished => MantleStep::Inactive,
         }
     }
+}
+
+/// Reject invalid/negative host clocks rather than feeding them into UE arithmetic.
+fn valid_clock(delta: f32, player_factor: f32) -> bool {
+    delta.is_finite() && player_factor.is_finite() && delta >= 0.0 && player_factor >= 0.0
 }
