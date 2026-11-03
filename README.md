@@ -1,5 +1,7 @@
 # Ghostrunner 2 controller in Bevy
 
+# WARNING: This project is entirely AI generated
+
 A Rust reconstruction of Jack's controller from the owned GR2 native executable
 and cooked player Blueprint. Uses Bevy 0.19.1 and Avian3d 0.7.0 with a locked
 Cargo dependency graph. This is an implemented research port with explicit
