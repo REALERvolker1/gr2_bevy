@@ -1,9 +1,14 @@
 # Unreal controller research tools
 
-These tools come from `/mnt/gr2xhl1` at commit
+These tools come from a prior local research workspace at commit
 `368bb5b6a69a22421b908f927b26b6783263aeab`. They inspect the owned GR2
 packages, native functions, and passive movement observations. No Xash engine,
 Half-Life controller, model conversion, or host integration is included.
+
+This repository does not launch GR2. Headless game testing under
+Xvfb/gamescope is covered by the separate
+[gr2_headless](https://github.com/REALERvolker1/gr2_headless) project; the Xvfb
+script here only drives the Bevy fixture.
 
 The authored package inspector is copied unchanged. It uses UAssetAPI revision
 `3228c1e86261aa08131f7ec0ff1a395f5d0b2a84`, UE4.27 decoding, an exact binary
@@ -41,8 +46,9 @@ the same binary roundtrip and VM-size checks. Its output is
 slide package successfully. ShellCheck and Pyright passed for these scripts.
 The subsequent native pass reopened the original persistent project. The local
 health probe initialized MCP, enumerated 222 tools and confirmed the selected
-`Ghostrunner2-Win64-Shipping.exe` program. Project-local `.codex/config.toml`
-registers this bridge; no global MCP configuration was changed.
+`Ghostrunner2-Win64-Shipping.exe` program. A gitignored project-local
+`.codex/config.toml` registers this bridge; no global MCP configuration was
+changed.
 
 To save another owned package, set `GR2_PAK` to the installed
 `Ghostrunner2-WindowsNoEditor.pak`:
@@ -114,11 +120,15 @@ python3 scripts/archive-movement-traces.py --help
 python3 scripts/stamina_trace.py --help
 ```
 
-Default active storage is `~/.local/state/gr2_bevy/traces/movement/`; archives
-are `.work/traces/movement/`. The installer rewrites Wine's `Z:` output path,
-backs up load order and settings, and refuses an active game or edited existing
-recorder. `--update` verifies installed hashes before replacing an existing mod.
-The copied override INI is a researched reference, not automatically installed.
+Machine-specific paths come from the gitignored `config/local.toml`. Copy
+`config/local.toml.example` and edit `game_dir`, `trace_dir` and
+`compatdata_dirs` before using the recorder scripts; `--game` and `--output`
+override the first two. Building and testing the Bevy fixture does not read
+this file. Archives are `.work/traces/movement/`. The installer rewrites Wine's
+`Z:` output path from `trace_dir`, backs up load order and settings, and
+refuses an active game or edited existing recorder. `--update` verifies
+installed hashes before replacing an existing mod. The copied override INI is a
+researched reference, not automatically installed.
 
 Read `movement_trace.py` before interpreting traces. Samples carry possession
 and upgrade revisions; missing upgrade observations mean unknown loadout.

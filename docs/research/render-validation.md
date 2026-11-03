@@ -1,9 +1,13 @@
 # Vulkan presentation validation
 
+This investigation runs the Bevy fixture, not the original game. Headless GR2
+testing under Xvfb/gamescope is handled by the separate
+[gr2_headless](https://github.com/REALERvolker1/gr2_headless) project.
+
 The Xvfb run preserved in `.work/render-diagnosis/baseline.log` produced a real
 PBR screenshot and completed the scripted controller actions, but its renderer
-validation was not clean. The adapter was an NVIDIA RTX3060 Laptop GPU,
-driver615.78.08, using Vulkan. The pinned crates are Bevy0.19.1 and
+validation was not clean. The adapter was the host's Vulkan GPU. The pinned
+crates are Bevy0.19.1 and
 wgpu/wgpu-hal29.0.4. This is a host-renderer investigation, independent of GR2
 controller source parity.
 
@@ -62,9 +66,9 @@ clear pattern, but also covers the initial camera window. Normal camera and
 screenshot rendering retain their original paths. Vulkan validation stays enabled;
 no driver, presentation mode or dependency version changed.
 
-The fresh Xvfb run on 2026-10-13 UTC used the same RTX3060/Vulkan adapter and
-615.78.08 driver. It completed 2,132 fixed controller steps, satisfied the ground
-dash, slide, jump, air press/release and wall-stop assertions, and saved an
+The fresh Xvfb run on 2026-10-13 UTC used the same Vulkan adapter and driver.
+It completed 2,132 fixed controller steps, satisfied the ground dash, slide,
+jump, air press/release and wall-stop assertions, and saved an
 inspected 1280x720 course screenshot. The complete log contains no `ERROR` or
 `VALIDATION` entries. Artifacts are `.work/validation/xvfb.log`, `xvfb.png` and
 `controller.csv`. `scripts/test-xvfb.sh` now fails when the render log contains
@@ -76,7 +80,7 @@ behavior on other render backends, or GR2 controller parity.
 
 ## Ledge port regression checks
 
-Fresh runs on 2026-10-13 UTC used the same RTX3060/Vulkan adapter and driver.
+Fresh runs on 2026-10-13 UTC used the same Vulkan adapter and driver.
 Both logs contain no `ERROR` or `VALIDATION` entries, and both inspected screenshots
 are 1280x720. The application now uses the cooked main capsule dimensions and
 camera offset. The end wall is authored taller to keep the wall-stop course

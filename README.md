@@ -5,6 +5,11 @@ and cooked player Blueprint. Uses Bevy 0.19.1 and Avian3d 0.7.0 with a locked
 Cargo dependency graph. This is an implemented research port with explicit
 remaining source and parity gaps, not a complete Ghostrunner 2 runtime.
 
+> Unofficial fan research. This project is not affiliated with, endorsed by or
+> sponsored by 505 Games or One More Level. Ghostrunner 2 and related marks
+> belong to their respective owners. No game assets, binaries, keys or traces
+> are included.
+
 ```sh
 cargo run --locked
 ```
@@ -42,17 +47,34 @@ course asserts one complete native mount and its planar finish velocity. Headles
 independently exercise real Avian collisions and source arithmetic, including
 ascent admission, blocked ledges and the nonretriggering permission delay.
 Vulkan validation remains enabled; the Xvfb check rejects renderer errors. See the
-[renderer investigation](docs/research/render-validation.md).
+[renderer investigation](docs/research/render-validation.md). The Xvfb script
+only drives the Bevy fixture. Headless testing of the original game
+(Xvfb/gamescope) is out of scope here and lives in the separate
+[gr2_headless](https://github.com/REALERvolker1/gr2_headless) project.
 
 [UE tooling](docs/ue-tooling.md) is copied locally: pinned package inspector,
 UEViewer/package extraction wrappers, bounded Ghidra exporter and passive UE4SS
 movement recorder. Dependencies, owned inputs, raw bytecode/native exports and
 traces stay ignored. Atomic commits and source-evidence rules are in AGENTS.md.
 
-The pre-existing workspace REA6.3.0 installation remains in `.rea/`, with its
-launcher at `tools/rea` and process-scoped Codex launcher at
-`tools/codex-workspace`. The project MCP config now points to this workspace's
-launcher and the original persistent Ghidra bridge. No global setup is needed.
+## Research tooling
+
+The findings were produced with the
+[Reverse Engineer Anything (REA)](https://github.com/morluto/rea) skill,
+Ghidra and UE4SS. The skill text is vendored under
+`.agents/skills/reverse-engineer-anything/` for provenance; it is not needed to
+build, run or test the controller. REA is MIT-licensed; see
+[third-party notices](THIRD_PARTY_NOTICES.md).
+
+`tools/rea` and `tools/codex-workspace` launch the local research environment.
+`.codex/` and `config/local.toml` are gitignored and machine-specific. The
+recorder and research scripts read local paths from that config; copy the
+example before using them:
+
+```sh
+cp config/local.toml.example config/local.toml
+$EDITOR config/local.toml
+```
 
 Engine references: [Avian0.7.0 manifest](https://github.com/avianphysics/avian/blob/v0.7.0/crates/avian3d/Cargo.toml)
 and [its kinematic controller example](https://github.com/avianphysics/avian/blob/v0.7.0/crates/avian3d/examples/kinematic_character_3d/plugin.rs).
