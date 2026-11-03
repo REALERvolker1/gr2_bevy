@@ -10,7 +10,8 @@ The investigation follows original native exports and the original cooked
 `/Game/Player/BP_PlayerCharacter` bytecode. Xash movement code is not a source.
 New private native exports and hashes are in
 `.work/research/controller-closure/manifest.json`. Prior package qualification is
-`/mnt/gr2xhl1/.work/research/16083277/player-blueprint/indexed-player-qualified/manifest.json`.
+the originating workspace's private
+`.work/research/16083277/player-blueprint/indexed-player-qualified/manifest.json`.
 Its asset and bytecode index account for all declared VM bytes and exact package
 roundtrip. The authored native export recipe is `research/controller-scope.tsv`. Package export indices below are one-based. VM offsets belong to
 `ExecuteUbergraph_BP_PlayerCharacter`, export 3, unless stated otherwise.

@@ -11,9 +11,14 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from local_config import LocalConfig
+from local_config import load as load_local_config
+
 ROOT = Path(__file__).resolve().parents[1]
 MOD = "GR2MovementRecorder"
 GAME_SHA256 = "3900626fe173ec8f22c963876137b207c85ba0911b82ba17696b9e5e4a49af85"
+# Non-machine sentinel in the tracked Lua template; install() replaces it.
+OUTPUT_PLACEHOLDER = '"Z:/gr2-traces"'
 LOG = logging.getLogger("gr2.recorder.install")
 
 
@@ -55,7 +60,7 @@ def verify_existing(destination: Path) -> None:
             raise ValueError(f"Preserve locally modified recorder script: {name}")
 
 
-def install(game: Path, output: Path, update: bool = False) -> Path:
+def install(config: LocalConfig, game: Path, output: Path, update: bool = False) -> Path:
     require_stopped()
     executable = game / "Ghostrunner2-Win64-Shipping.exe"
     if digest(executable) != GAME_SHA256:
@@ -75,9 +80,11 @@ def install(game: Path, output: Path, update: bool = False) -> Path:
         raise ValueError("Existing recorder load-order entry needs review")
     if update and not present:
         raise ValueError("Existing recorder load-order entry missing")
-    local_traces = Path.home() / ".local/state/gr2_bevy/traces"
-    if not any(output.resolve().is_relative_to(root) for root in (ROOT / ".work", local_traces)):
-        raise ValueError("Captures must stay under workspace .work or local GR2 trace storage")
+    if not any(
+        output.resolve().is_relative_to(root)
+        for root in (ROOT / ".work", config.trace_dir)
+    ):
+        raise ValueError("Captures must stay under workspace .work or the configured trace_dir")
     output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
     backup = ROOT / ".work/lab/backups" / f"movement-recorder-{stamp}"
@@ -85,10 +92,7 @@ def install(game: Path, output: Path, update: bool = False) -> Path:
     shutil.copy2(mods_path, backup / "mods.txt")
     shutil.copy2(game / "UE4SS-settings.ini", backup / "UE4SS-settings.ini")
     # Save/config backups exclude regenerated crash reports, shader caches and logs.
-    prefixes = [
-        Path("/bruh/steam/steamapps/compatdata/2144740"),
-        Path.home() / ".local/state/gr2_bevy/ue4ss-debug/compatdata",
-    ]
+    prefixes = config.compatdata_dirs
     for index, prefix in enumerate(prefixes):
         saved = prefix / "pfx/drive_c/users/steamuser/AppData/Local/Ghostrunner2/Saved"
         for name in ("SaveGames", "Config"):
@@ -107,10 +111,11 @@ def install(game: Path, output: Path, update: bool = False) -> Path:
         shutil.copy2(path, staging / "Scripts" / path.name)
     settings = staging / "Scripts/gr2_settings.lua"
     text = settings.read_text()
-    default = '"Z:/home/vlk/.local/state/gr2_bevy/traces/movement"'
-    if text.count(default) != 1:
+    if text.count(OUTPUT_PLACEHOLDER) != 1:
         raise ValueError("Recorder output setting no longer matches installer template")
-    settings.write_text(text.replace(default, json.dumps("Z:" + str(output.resolve()))))
+    settings.write_text(
+        text.replace(OUTPUT_PLACEHOLDER, json.dumps("Z:" + str(output.resolve())))
+    )
     manifest = {
         "installed_at": stamp,
         "game": str(game),
@@ -153,12 +158,12 @@ def main() -> None:
     parser.add_argument(
         "--game",
         type=Path,
-        default=Path("/bruh/steam/steamapps/common/Ghostrunner 2/Ghostrunner2/Binaries/Win64"),
+        help="Win64 binaries directory; defaults to game_dir in config/local.toml",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path.home() / ".local/state/gr2_bevy/traces/movement",
+        help="capture directory; defaults to trace_dir in config/local.toml",
     )
     parser.add_argument(
         "--update",
@@ -168,7 +173,10 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
-        install(args.game.resolve(), args.output.resolve(), args.update)
+        config = load_local_config()
+        game = (args.game or config.game_dir).resolve()
+        output = (args.output or config.trace_dir).resolve()
+        install(config, game, output, args.update)
     except (OSError, ValueError, TypeError) as error:
         parser.exit(1, f"Recorder installation failed: {error}\n")
 

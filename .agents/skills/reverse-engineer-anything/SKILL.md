@@ -10,14 +10,14 @@ metadata:
 
 ## Workspace installation
 
-In `/mnt/gr2_bevy`, use `./tools/rea` in place of every
+In this workspace, use `./tools/rea` in place of every
 `npx -y rea-agents@6.3.0` command below. This wrapper uses the pinned local
 package and keeps generated state inside `.rea/`.
 
 For connection problems here, run `./tools/rea mcp doctor --json` and
 `./tools/codex-workspace mcp get rea --json`. Native readiness is checked
 with `./tools/rea doctor --provider ghidra --json`.
-Registration is in `.codex/config.toml`; the matching skill is in
+Registration is in a gitignored `.codex/config.toml`; the matching skill is in
 `.agents/skills/reverse-engineer-anything`. Repair those workspace files
 directly rather than running REA's user-level `setup` or `uninstall`.
 Start a fresh session with `./tools/codex-workspace` if tools are missing.

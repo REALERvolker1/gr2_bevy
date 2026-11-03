@@ -1,0 +1,16 @@
+# Machine-specific paths for the GR2 research scripts.
+#
+# Copy this file to config/local.toml (gitignored) and edit the values.
+# Building, running and testing the Bevy fixture does not read this file.
+
+# Directory containing Ghostrunner2-Win64-Shipping.exe.
+game_dir = "/path/to/steamapps/common/Ghostrunner 2/Ghostrunner2/Binaries/Win64"
+
+# Host directory for closed recorder captures. The installer rewrites this as
+# a Wine Z: path for the in-game recorder, and archive-movement-traces.py reads
+# captures from it.
+trace_dir = "/path/to/state/gr2_bevy/traces/movement"
+
+# Steam compatdata prefixes whose Ghostrunner 2 save/config folders the
+# installer backs up before it touches the live mod. Use [] when there are none.
+compatdata_dirs = ["/path/to/steamapps/compatdata/2144740"]

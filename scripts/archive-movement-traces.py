@@ -9,6 +9,8 @@ import shutil
 import uuid
 from pathlib import Path
 
+from local_config import load as load_local_config
+
 ROOT = Path(__file__).resolve().parents[1]
 LOG = logging.getLogger("gr2.recorder.archive")
 
@@ -69,7 +71,7 @@ def main() -> None:
 	parser.add_argument(
 		"--source",
 		type=Path,
-		default=Path.home() / ".local/state/gr2_bevy/traces/movement",
+		help="capture directory; defaults to trace_dir in config/local.toml",
 	)
 	parser.add_argument(
 		"--destination", type=Path, default=ROOT / ".work/traces/movement"
@@ -77,9 +79,10 @@ def main() -> None:
 	args = parser.parse_args()
 	logging.basicConfig(level=logging.INFO, format="%(message)s")
 	try:
-		count = archive(args.source, args.destination)
+		source = args.source if args.source is not None else load_local_config().trace_dir
+		count = archive(source, args.destination)
 		LOG.info("Copied %d captures; local originals retained", count)
-	except (OSError, ValueError) as error:
+	except (OSError, TypeError, ValueError) as error:
 		parser.exit(1, f"Capture archive failed: {error}\n")
 
 

@@ -5,3 +5,6 @@ research-local/
 **/bin/
 **/obj/
 __pycache__/
+# Machine-specific paths and local agent configuration.
+config/local.toml
+.codex/

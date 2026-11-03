@@ -1,6 +1,7 @@
 return {
-	-- Wine exposes the workspace through Z:. The installer supplies this path.
-	output_directory = "Z:/home/vlk/.local/state/gr2_bevy/traces/movement",
+	-- Wine exposes the host through Z:. The installer replaces this placeholder
+	-- with the trace_dir configured in config/local.toml.
+	output_directory = "Z:/gr2-traces",
 	poll_ms = 8,
 	-- Native hook dispatch failed on dash in the user's 2.3 session. Keep polling
 	-- independent of that observer until its compatibility is established.
